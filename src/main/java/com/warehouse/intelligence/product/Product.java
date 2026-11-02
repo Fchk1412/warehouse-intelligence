@@ -33,8 +33,11 @@ public class Product {
     @Column(precision = 12, scale = 2, nullable = false)
     private BigDecimal unitPrice;
 
-    @Column(nullable = false, updatable = false)
+    @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private Instant createdAt;
+
+    @Column(nullable = false)
+    private boolean active = true;
 
     public Product() {
     }
@@ -94,6 +97,12 @@ public class Product {
         this.createdAt = createdAt;
     }
 
+    public boolean isActive() {
+        return active;
+    }
 
+    public void setActive(boolean active) {
+        this.active = active;
+    }
 }
 

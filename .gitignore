@@ -31,3 +31,11 @@ build/
 
 ### VS Code ###
 .vscode/
+### Java / Maven###
+*.class
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+application-local.properties

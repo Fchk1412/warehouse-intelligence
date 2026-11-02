@@ -1,0 +1,9 @@
+POST http://localhost:8080/api/products
+Content-Type: application/json
+
+{
+  "sku": "LAPTOP-001",
+  "name": "Lenovo ThinkPad T14",
+  "description": "Business laptop with Intel Core i7",
+  "unitPrice": 1299.88
+}

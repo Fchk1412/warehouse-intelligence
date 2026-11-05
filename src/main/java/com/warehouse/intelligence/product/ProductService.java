@@ -38,6 +38,12 @@ public class ProductService {
     }
 
     public ProductDto createProduct(CreateProductRequest request){
+        if (productRepository.existsBySku(request.sku())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "SKU already exists"
+            );
+        }
+
         Product product = new Product(
                 request.sku(), request.name(), request.description(), request.unitPrice()
                 );

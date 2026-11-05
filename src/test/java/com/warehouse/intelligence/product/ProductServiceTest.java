@@ -1,5 +1,7 @@
 package com.warehouse.intelligence.product;
 
+import com.warehouse.intelligence.common.exception.DuplicateResourceException;
+import com.warehouse.intelligence.common.exception.ResourceNotFoundException;
 import com.warehouse.intelligence.product.dto.CreateProductRequest;
 import com.warehouse.intelligence.product.dto.ProductDto;
 import com.warehouse.intelligence.product.dto.UpdateProductRequest;
@@ -12,8 +14,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -63,12 +63,12 @@ class ProductServiceTest {
                 .thenReturn(Optional.empty());
 
         // Act + Assert
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
+        ResourceNotFoundException exception = assertThrows(
+                ResourceNotFoundException.class,
                 () -> productService.getProductById(999L)
         );
 
-        assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
+        assertEquals("Product not found", exception.getMessage());
     }
 
     @Test
@@ -111,12 +111,12 @@ class ProductServiceTest {
         when(productRepository.existsBySku("LAPTOP-001")).thenReturn(true);
 
         // Act + Assert
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
+        DuplicateResourceException exception = assertThrows(
+                DuplicateResourceException.class,
                 () -> productService.createProduct(request)
         );
 
-        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals("SKU already exists", exception.getMessage());
         verify(productRepository, never()).save(any(Product.class));
     }
 
@@ -181,13 +181,13 @@ class ProductServiceTest {
         when(productRepository.existsBySkuAndIdNot("LAPTOP-002", 1L)).thenReturn(true);
 
         //Act
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
+        DuplicateResourceException exception = assertThrows(
+                DuplicateResourceException.class,
                 () -> productService.updateProduct(1L,request)
         );
 
         //Assert
-        assertEquals(HttpStatus.CONFLICT,exception.getStatusCode());
+        assertEquals("SKU already exists", exception.getMessage());
         verify(productRepository,never()).save(any(Product.class));
     }
 
@@ -218,12 +218,12 @@ class ProductServiceTest {
         when(productRepository.findById(999L)).thenReturn(Optional.empty());
 
         // Act + Assert
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
+        ResourceNotFoundException exception = assertThrows(
+                ResourceNotFoundException.class,
                 () -> productService.deleteProduct(999L)
         );
 
-        assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
+        assertEquals("Product not found", exception.getMessage());
         verify(productRepository, never()).save(any(Product.class));
     }
 

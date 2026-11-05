@@ -1,14 +1,14 @@
 package com.warehouse.intelligence.product;
 
+import com.warehouse.intelligence.common.exception.DuplicateResourceException;
+import com.warehouse.intelligence.common.exception.ResourceNotFoundException;
 import com.warehouse.intelligence.product.dto.CreateProductRequest;
 import com.warehouse.intelligence.product.dto.ProductDto;
 import com.warehouse.intelligence.product.dto.ProductMapper;
 import com.warehouse.intelligence.product.dto.UpdateProductRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 
 @Service
@@ -22,9 +22,7 @@ public class ProductService {
 
     private Product findProductOrThrow(Long id) {
         return productRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Product not found"
-                ));
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
     }
     public Page<ProductDto> getAllProducts(Pageable pageable){
         return productRepository.findAll(pageable).map(ProductMapper::toProductDto);
@@ -39,9 +37,7 @@ public class ProductService {
 
     public ProductDto createProduct(CreateProductRequest request){
         if (productRepository.existsBySku(request.sku())) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT, "SKU already exists"
-            );
+            throw new DuplicateResourceException("SKU already exists");
         }
 
         Product product = new Product(
@@ -56,9 +52,8 @@ public class ProductService {
             Product product = findProductOrThrow(id);
 
             if (productRepository.existsBySkuAndIdNot(request.sku(),id)){
-                throw new ResponseStatusException(
-                        HttpStatus.CONFLICT, "SKU already exists"
-                );}
+                throw new DuplicateResourceException("SKU already exists");
+            }
 
             product.setSku(request.sku());
             product.setDescription(request.description());
@@ -77,7 +72,7 @@ public class ProductService {
         return ProductMapper.toProductDto(product);
 
     }
-    }
+}
 
 
 

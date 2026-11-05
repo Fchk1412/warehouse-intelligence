@@ -1,5 +1,7 @@
 package com.warehouse.intelligence.warehouse;
 
+import com.warehouse.intelligence.common.exception.DuplicateResourceException;
+import com.warehouse.intelligence.common.exception.ResourceNotFoundException;
 import com.warehouse.intelligence.warehouse.dto.CreateWarehouseRequest;
 import com.warehouse.intelligence.warehouse.dto.UpdateWarehouseRequest;
 import com.warehouse.intelligence.warehouse.dto.WarehouseDto;
@@ -12,8 +14,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Optional;
@@ -87,12 +87,12 @@ class WarehouseServiceTest {
         when(warehouseRepository.findById(999L)).thenReturn(Optional.empty());
 
         // Act + Assert
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
+        ResourceNotFoundException exception = assertThrows(
+                ResourceNotFoundException.class,
                 () -> warehouseService.getWarehouseById(999L)
         );
 
-        assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
+        assertEquals("Warehouse not found", exception.getMessage());
     }
 
     @Test
@@ -131,12 +131,12 @@ class WarehouseServiceTest {
         when(warehouseRepository.existsByCode("MOD-01")).thenReturn(true);
 
         // Act + Assert
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
+        DuplicateResourceException exception = assertThrows(
+                DuplicateResourceException.class,
                 () -> warehouseService.createWarehouse(request)
         );
 
-        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals("Warehouse code already exists", exception.getMessage());
         verify(warehouseRepository, never()).save(any(Warehouse.class));
     }
 
@@ -189,12 +189,12 @@ class WarehouseServiceTest {
         when(warehouseRepository.existsByCodeAndIdNot("MIL-01", 1L)).thenReturn(true);
 
         // Act + Assert
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
+        DuplicateResourceException exception = assertThrows(
+                DuplicateResourceException.class,
                 () -> warehouseService.updateWarehouse(1L, request)
         );
 
-        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals("Warehouse code already exists", exception.getMessage());
         verify(warehouseRepository, never()).save(any(Warehouse.class));
     }
 
@@ -210,12 +210,12 @@ class WarehouseServiceTest {
         when(warehouseRepository.findById(999L)).thenReturn(Optional.empty());
 
         // Act + Assert
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
+        ResourceNotFoundException exception = assertThrows(
+                ResourceNotFoundException.class,
                 () -> warehouseService.updateWarehouse(999L, request)
         );
 
-        assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
+        assertEquals("Warehouse not found", exception.getMessage());
         verify(warehouseRepository, never()).save(any(Warehouse.class));
     }
 
@@ -246,12 +246,12 @@ class WarehouseServiceTest {
         when(warehouseRepository.findById(999L)).thenReturn(Optional.empty());
 
         // Act + Assert
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
+        ResourceNotFoundException exception = assertThrows(
+                ResourceNotFoundException.class,
                 () -> warehouseService.deleteWarehouse(999L)
         );
 
-        assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
+        assertEquals("Warehouse not found", exception.getMessage());
         verify(warehouseRepository, never()).save(any(Warehouse.class));
     }
 }

@@ -1,14 +1,14 @@
 package com.warehouse.intelligence.warehouse;
 
+import com.warehouse.intelligence.common.exception.DuplicateResourceException;
+import com.warehouse.intelligence.common.exception.ResourceNotFoundException;
 import com.warehouse.intelligence.warehouse.dto.CreateWarehouseRequest;
 import com.warehouse.intelligence.warehouse.dto.UpdateWarehouseRequest;
 import com.warehouse.intelligence.warehouse.dto.WarehouseDto;
 import com.warehouse.intelligence.warehouse.dto.WarehouseMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class WarehouseService {
@@ -21,9 +21,7 @@ public class WarehouseService {
 
     private Warehouse findWarehouseOrThrow(Long id) {
         return warehouseRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Warehouse not found"
-                ));
+                .orElseThrow(() -> new ResourceNotFoundException("Warehouse not found"));
     }
 
     public Page<WarehouseDto> getAllWarehouses(Pageable pageable) {
@@ -37,9 +35,7 @@ public class WarehouseService {
 
     public WarehouseDto createWarehouse(CreateWarehouseRequest request) {
         if (warehouseRepository.existsByCode(request.code())) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT, "Warehouse code already exists"
-            );
+            throw new DuplicateResourceException("Warehouse code already exists");
         }
 
         Warehouse warehouse = new Warehouse(
@@ -55,9 +51,7 @@ public class WarehouseService {
         Warehouse warehouse = findWarehouseOrThrow(id);
 
         if (warehouseRepository.existsByCodeAndIdNot(request.code(), id)) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT, "Warehouse code already exists"
-            );
+            throw new DuplicateResourceException("Warehouse code already exists");
         }
 
         warehouse.setCode(request.code());

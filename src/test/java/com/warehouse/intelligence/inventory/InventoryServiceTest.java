@@ -6,6 +6,8 @@ import com.warehouse.intelligence.common.exception.ResourceNotFoundException;
 import com.warehouse.intelligence.inventory.dto.CreateInventoryRequest;
 import com.warehouse.intelligence.inventory.dto.InventoryDto;
 import com.warehouse.intelligence.inventory.dto.UpdateInventoryRequest;
+import com.warehouse.intelligence.movement.InventoryMovement;
+import com.warehouse.intelligence.movement.InventoryMovementRepository;
 import com.warehouse.intelligence.product.Product;
 import com.warehouse.intelligence.product.ProductRepository;
 import com.warehouse.intelligence.warehouse.Warehouse;
@@ -40,6 +42,9 @@ class InventoryServiceTest {
 
     @Mock
     private WarehouseRepository warehouseRepository;
+
+    @Mock
+    private InventoryMovementRepository movementRepository;
 
     @InjectMocks
     private InventoryService inventoryService;
@@ -220,6 +225,28 @@ class InventoryServiceTest {
         assertEquals(10, result.minStockLevel());
         assertFalse(result.lowStock());
         verify(inventoryRepository).save(any(Inventory.class));
+        verify(movementRepository).save(any(InventoryMovement.class));
+    }
+
+    @Test
+    void shouldNotCreateInitialMovementWhenOpeningQuantityIsZero() {
+        // Arrange
+        CreateInventoryRequest request = new CreateInventoryRequest(1L, 2L, 0, 10);
+
+        when(productRepository.findById(1L)).thenReturn(Optional.of(activeProduct));
+        when(warehouseRepository.findById(2L)).thenReturn(Optional.of(activeWarehouse));
+        when(inventoryRepository.existsByProductIdAndWarehouseId(1L, 2L)).thenReturn(false);
+        when(inventoryRepository.save(any(Inventory.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Act
+        InventoryDto result = inventoryService.createInventory(request);
+
+        // Assert
+        assertEquals(0, result.quantity());
+        assertTrue(result.lowStock());
+        verify(inventoryRepository).save(any(Inventory.class));
+        verify(movementRepository, never()).save(any(InventoryMovement.class));
     }
 
     @Test
@@ -314,12 +341,12 @@ class InventoryServiceTest {
     }
 
     @Test
-    void shouldUpdateInventorySuccessfully() {
+    void shouldUpdateInventoryMinStockLevelAndSetLowStockTrue() {
         // Arrange
-        Inventory existingInventory = new Inventory(activeProduct, activeWarehouse, 25, 10);
+        Inventory existingInventory = new Inventory(activeProduct, activeWarehouse, 10, 5);
         existingInventory.setId(100L);
 
-        UpdateInventoryRequest request = new UpdateInventoryRequest(5, 15);
+        UpdateInventoryRequest request = new UpdateInventoryRequest(15);
 
         when(inventoryRepository.findById(100L)).thenReturn(Optional.of(existingInventory));
         when(inventoryRepository.save(any(Inventory.class)))
@@ -329,19 +356,19 @@ class InventoryServiceTest {
         InventoryDto result = inventoryService.updateInventory(100L, request);
 
         // Assert
-        assertEquals(5, result.quantity());
+        assertEquals(10, result.quantity());
         assertEquals(15, result.minStockLevel());
         assertTrue(result.lowStock());
         verify(inventoryRepository).save(existingInventory);
     }
 
     @Test
-    void shouldUpdateInventoryAboveThresholdAndSetLowStockFalse() {
+    void shouldUpdateInventoryMinStockLevelBelowQuantityAndSetLowStockFalse() {
         // Arrange
-        Inventory existingInventory = new Inventory(activeProduct, activeWarehouse, 5, 10);
+        Inventory existingInventory = new Inventory(activeProduct, activeWarehouse, 10, 15);
         existingInventory.setId(100L);
 
-        UpdateInventoryRequest request = new UpdateInventoryRequest(40, 10);
+        UpdateInventoryRequest request = new UpdateInventoryRequest(5);
 
         when(inventoryRepository.findById(100L)).thenReturn(Optional.of(existingInventory));
         when(inventoryRepository.save(any(Inventory.class)))
@@ -351,8 +378,8 @@ class InventoryServiceTest {
         InventoryDto result = inventoryService.updateInventory(100L, request);
 
         // Assert
-        assertEquals(40, result.quantity());
-        assertEquals(10, result.minStockLevel());
+        assertEquals(10, result.quantity());
+        assertEquals(5, result.minStockLevel());
         assertFalse(result.lowStock());
         verify(inventoryRepository).save(existingInventory);
     }
@@ -360,7 +387,7 @@ class InventoryServiceTest {
     @Test
     void shouldThrowNotFoundWhenUpdatingNonExistentInventory() {
         // Arrange
-        UpdateInventoryRequest request = new UpdateInventoryRequest(5, 15);
+        UpdateInventoryRequest request = new UpdateInventoryRequest(15);
 
         when(inventoryRepository.findById(999L)).thenReturn(Optional.empty());
 

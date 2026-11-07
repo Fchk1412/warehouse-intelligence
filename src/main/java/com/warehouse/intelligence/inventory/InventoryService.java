@@ -7,6 +7,9 @@ import com.warehouse.intelligence.inventory.dto.CreateInventoryRequest;
 import com.warehouse.intelligence.inventory.dto.InventoryDto;
 import com.warehouse.intelligence.inventory.dto.InventoryMapper;
 import com.warehouse.intelligence.inventory.dto.UpdateInventoryRequest;
+import com.warehouse.intelligence.movement.InventoryMovement;
+import com.warehouse.intelligence.movement.InventoryMovementRepository;
+import com.warehouse.intelligence.movement.MovementType;
 import com.warehouse.intelligence.product.Product;
 import com.warehouse.intelligence.product.ProductRepository;
 import com.warehouse.intelligence.warehouse.Warehouse;
@@ -14,6 +17,7 @@ import com.warehouse.intelligence.warehouse.WarehouseRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class InventoryService {
@@ -21,14 +25,17 @@ public class InventoryService {
     private final InventoryRepository inventoryRepository;
     private final ProductRepository productRepository;
     private final WarehouseRepository warehouseRepository;
+    private final InventoryMovementRepository movementRepository;
 
     public InventoryService(
             InventoryRepository inventoryRepository,
             ProductRepository productRepository,
-            WarehouseRepository warehouseRepository) {
+            WarehouseRepository warehouseRepository,
+            InventoryMovementRepository movementRepository) {
         this.inventoryRepository = inventoryRepository;
         this.productRepository = productRepository;
         this.warehouseRepository = warehouseRepository;
+        this.movementRepository = movementRepository;
     }
 
     private Inventory findInventoryOrThrow(Long id) {
@@ -62,6 +69,7 @@ public class InventoryService {
                 .map(InventoryMapper::toInventoryDto);
     }
 
+    @Transactional
     public InventoryDto createInventory(CreateInventoryRequest request) {
         Product product = productRepository.findById(request.productId())
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
@@ -89,13 +97,24 @@ public class InventoryService {
         );
 
         Inventory savedInventory = inventoryRepository.save(inventory);
+
+        if (request.quantity() > 0) {
+            InventoryMovement initialMovement = new InventoryMovement(
+                    savedInventory,
+                    MovementType.IN,
+                    request.quantity(),
+                    "Initial stock"
+            );
+            movementRepository.save(initialMovement);
+        }
+
         return InventoryMapper.toInventoryDto(savedInventory);
     }
 
+    @Transactional
     public InventoryDto updateInventory(Long id, UpdateInventoryRequest request) {
         Inventory inventory = findInventoryOrThrow(id);
 
-        inventory.setQuantity(request.quantity());
         inventory.setMinStockLevel(request.minStockLevel());
 
         Inventory savedInventory = inventoryRepository.save(inventory);

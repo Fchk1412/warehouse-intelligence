@@ -241,13 +241,12 @@ class InventoryControllerTest {
     @Test
     void shouldUpdateInventoryAndReturn200() throws Exception {
         // Arrange
-        InventoryDto updatedDto = sampleInventoryDto(40, 15, false);
+        InventoryDto updatedDto = sampleInventoryDto(25, 15, false);
         when(inventoryService.updateInventory(eq(100L), any(UpdateInventoryRequest.class)))
                 .thenReturn(updatedDto);
 
         String requestBody = """
                 {
-                    "quantity": 40,
                     "minStockLevel": 15
                 }
                 """;
@@ -257,7 +256,7 @@ class InventoryControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.quantity").value(40))
+                .andExpect(jsonPath("$.quantity").value(25))
                 .andExpect(jsonPath("$.minStockLevel").value(15))
                 .andExpect(jsonPath("$.lowStock").value(false));
     }
@@ -267,7 +266,6 @@ class InventoryControllerTest {
         // Arrange
         String invalidBody = """
                 {
-                    "quantity": 10,
                     "minStockLevel": -1
                 }
                 """;

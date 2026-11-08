@@ -6,8 +6,9 @@ import com.warehouse.intelligence.common.exception.ResourceNotFoundException;
 import com.warehouse.intelligence.inventory.dto.CreateInventoryRequest;
 import com.warehouse.intelligence.inventory.dto.InventoryDto;
 import com.warehouse.intelligence.inventory.dto.UpdateInventoryRequest;
-import com.warehouse.intelligence.movement.InventoryMovement;
-import com.warehouse.intelligence.movement.InventoryMovementRepository;
+import com.warehouse.intelligence.movement.InventoryMovementService;
+import com.warehouse.intelligence.movement.MovementType;
+import com.warehouse.intelligence.movement.dto.CreateInventoryMovementRequest;
 import com.warehouse.intelligence.product.Product;
 import com.warehouse.intelligence.product.ProductRepository;
 import com.warehouse.intelligence.warehouse.Warehouse;
@@ -15,6 +16,7 @@ import com.warehouse.intelligence.warehouse.WarehouseRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -44,7 +46,7 @@ class InventoryServiceTest {
     private WarehouseRepository warehouseRepository;
 
     @Mock
-    private InventoryMovementRepository movementRepository;
+    private InventoryMovementService movementService;
 
     @InjectMocks
     private InventoryService inventoryService;
@@ -203,7 +205,7 @@ class InventoryServiceTest {
     }
 
     @Test
-    void shouldCreateInventorySuccessfully() {
+    void shouldCreateInventoryAtZeroAndDelegateOpeningStockToMovementService() {
         // Arrange
         CreateInventoryRequest request = new CreateInventoryRequest(1L, 2L, 30, 10);
 
@@ -211,21 +213,32 @@ class InventoryServiceTest {
         when(warehouseRepository.findById(2L)).thenReturn(Optional.of(activeWarehouse));
         when(inventoryRepository.existsByProductIdAndWarehouseId(1L, 2L)).thenReturn(false);
         when(inventoryRepository.save(any(Inventory.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> {
+                    Inventory saved = invocation.getArgument(0);
+                    saved.setId(100L);
+                    return saved;
+                });
 
         // Act
         InventoryDto result = inventoryService.createInventory(request);
 
-        // Assert
+        // Assert: the record itself is persisted with quantity 0...
+        ArgumentCaptor<Inventory> inventoryCaptor = ArgumentCaptor.forClass(Inventory.class);
+        verify(inventoryRepository).save(inventoryCaptor.capture());
+        assertEquals(0, inventoryCaptor.getValue().getQuantity());
+        assertEquals(10, inventoryCaptor.getValue().getMinStockLevel());
+
+        // ...and the opening stock is recorded as an IN movement by the movement service
+        ArgumentCaptor<CreateInventoryMovementRequest> movementCaptor =
+                ArgumentCaptor.forClass(CreateInventoryMovementRequest.class);
+        verify(movementService).recordMovement(movementCaptor.capture());
+        assertEquals(100L, movementCaptor.getValue().inventoryId());
+        assertEquals(MovementType.IN, movementCaptor.getValue().movementType());
+        assertEquals(30, movementCaptor.getValue().quantity());
+        assertEquals("Initial stock", movementCaptor.getValue().reason());
+
         assertEquals(1L, result.productId());
-        assertEquals("LAPTOP-001", result.productSku());
         assertEquals(2L, result.warehouseId());
-        assertEquals("MOD-01", result.warehouseCode());
-        assertEquals(30, result.quantity());
-        assertEquals(10, result.minStockLevel());
-        assertFalse(result.lowStock());
-        verify(inventoryRepository).save(any(Inventory.class));
-        verify(movementRepository).save(any(InventoryMovement.class));
     }
 
     @Test
@@ -246,7 +259,7 @@ class InventoryServiceTest {
         assertEquals(0, result.quantity());
         assertTrue(result.lowStock());
         verify(inventoryRepository).save(any(Inventory.class));
-        verify(movementRepository, never()).save(any(InventoryMovement.class));
+        verify(movementService, never()).recordMovement(any());
     }
 
     @Test

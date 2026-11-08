@@ -25,7 +25,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @Service
@@ -54,13 +56,19 @@ public class PurchaseOrderService {
     }
 
     private PurchaseOrder findPurchaseOrderOrThrow(Long id) {
-        return purchaseOrderRepository.findById(id)
+        return purchaseOrderRepository.findWithDetailsById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Purchase order not found"));
     }
 
+    /**
+     * Lock first, fetch second: the FOR UPDATE query touches only the purchase_orders row,
+     * then relationships are loaded in the same transaction (the row stays locked until commit).
+     */
     private PurchaseOrder findPurchaseOrderForUpdateOrThrow(Long id) {
-        return purchaseOrderRepository.findByIdForUpdate(id)
+        PurchaseOrder locked = purchaseOrderRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Purchase order not found"));
+
+        return purchaseOrderRepository.findWithDetailsById(id).orElse(locked);
     }
 
     @Transactional(readOnly = true)
@@ -69,9 +77,20 @@ public class PurchaseOrderService {
             Long warehouseId,
             PurchaseOrderStatus status,
             Pageable pageable) {
-        return purchaseOrderRepository
-                .findAllWithFilters(supplierId, warehouseId, status, pageable)
-                .map(PurchaseOrderMapper::toPurchaseOrderDto);
+        // Query 1: paginated headers (database applies LIMIT/OFFSET)
+        Page<PurchaseOrder> orders = purchaseOrderRepository
+                .findAllWithFilters(supplierId, warehouseId, status, pageable);
+
+        // Query 2: items for just this page. The result list isn't needed: the query
+        // initialises the items collections on the same managed instances held by the page.
+        if (orders.hasContent()) {
+            List<Long> orderIds = orders.getContent().stream()
+                    .map(PurchaseOrder::getId)
+                    .toList();
+            purchaseOrderRepository.fetchItemsForOrders(orderIds);
+        }
+
+        return orders.map(PurchaseOrderMapper::toPurchaseOrderDto);
     }
 
     @Transactional(readOnly = true)
@@ -197,13 +216,21 @@ public class PurchaseOrderService {
             throw new BusinessRuleException("Cannot receive stock into an inactive warehouse");
         }
 
-        for (PurchaseOrderItem item : order.getItems()) {
+        // Lock inventory rows in a consistent order (by product id) so two receipts that
+        // share products can't each hold one lock while waiting for the other (deadlock).
+        List<PurchaseOrderItem> itemsInLockOrder = order.getItems().stream()
+                .sorted(Comparator.comparing(item -> item.getProduct().getId()))
+                .toList();
+
+        for (PurchaseOrderItem item : itemsInLockOrder) {
             Product product = item.getProduct();
 
+            // Atomic create-if-absent, then lock the row that is now guaranteed to exist.
+            inventoryRepository.insertIfAbsent(product.getId(), warehouse.getId());
             Inventory inventory = inventoryRepository
                     .findByProductIdAndWarehouseIdForUpdate(product.getId(), warehouse.getId())
-                    .orElseGet(() -> inventoryRepository.save(
-                            new Inventory(product, warehouse, 0, 0)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "Inventory row missing after insert-if-absent for product " + product.getId()
                     ));
 
             movementService.recordMovement(new CreateInventoryMovementRequest(

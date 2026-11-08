@@ -7,9 +7,9 @@ import com.warehouse.intelligence.inventory.dto.CreateInventoryRequest;
 import com.warehouse.intelligence.inventory.dto.InventoryDto;
 import com.warehouse.intelligence.inventory.dto.InventoryMapper;
 import com.warehouse.intelligence.inventory.dto.UpdateInventoryRequest;
-import com.warehouse.intelligence.movement.InventoryMovement;
-import com.warehouse.intelligence.movement.InventoryMovementRepository;
+import com.warehouse.intelligence.movement.InventoryMovementService;
 import com.warehouse.intelligence.movement.MovementType;
+import com.warehouse.intelligence.movement.dto.CreateInventoryMovementRequest;
 import com.warehouse.intelligence.product.Product;
 import com.warehouse.intelligence.product.ProductRepository;
 import com.warehouse.intelligence.warehouse.Warehouse;
@@ -25,17 +25,17 @@ public class InventoryService {
     private final InventoryRepository inventoryRepository;
     private final ProductRepository productRepository;
     private final WarehouseRepository warehouseRepository;
-    private final InventoryMovementRepository movementRepository;
+    private final InventoryMovementService movementService;
 
     public InventoryService(
             InventoryRepository inventoryRepository,
             ProductRepository productRepository,
             WarehouseRepository warehouseRepository,
-            InventoryMovementRepository movementRepository) {
+            InventoryMovementService movementService) {
         this.inventoryRepository = inventoryRepository;
         this.productRepository = productRepository;
         this.warehouseRepository = warehouseRepository;
-        this.movementRepository = movementRepository;
+        this.movementService = movementService;
     }
 
     private Inventory findInventoryOrThrow(Long id) {
@@ -89,25 +89,28 @@ public class InventoryService {
             throw new DuplicateResourceException("Inventory record already exists for this product and warehouse");
         }
 
+        // The record always starts at zero. Any opening stock goes through
+        // InventoryMovementService, the single place allowed to change quantity.
         Inventory inventory = new Inventory(
                 product,
                 warehouse,
-                request.quantity(),
+                0,
                 request.minStockLevel()
         );
 
         Inventory savedInventory = inventoryRepository.save(inventory);
 
         if (request.quantity() > 0) {
-            InventoryMovement initialMovement = new InventoryMovement(
-                    savedInventory,
+            movementService.recordMovement(new CreateInventoryMovementRequest(
+                    savedInventory.getId(),
                     MovementType.IN,
                     request.quantity(),
                     "Initial stock"
-            );
-            movementRepository.save(initialMovement);
+            ));
         }
 
+        // savedInventory is a managed entity: the movement service loads the same
+        // instance from the persistence context, so its quantity is already updated.
         return InventoryMapper.toInventoryDto(savedInventory);
     }
 

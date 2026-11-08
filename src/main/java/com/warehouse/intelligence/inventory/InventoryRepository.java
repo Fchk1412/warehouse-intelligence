@@ -24,6 +24,14 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
     @Query("SELECT i FROM Inventory i WHERE i.id = :id")
     Optional<Inventory> findByIdForUpdate(@Param("id") Long id);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = {"product", "warehouse"})
+    @Query("SELECT i FROM Inventory i WHERE i.product.id = :productId AND i.warehouse.id = :warehouseId")
+    Optional<Inventory> findByProductIdAndWarehouseIdForUpdate(
+            @Param("productId") Long productId,
+            @Param("warehouseId") Long warehouseId
+    );
+
     @Override
     @EntityGraph(attributePaths = {"product", "warehouse"})
     Page<Inventory> findAll(Pageable pageable);
